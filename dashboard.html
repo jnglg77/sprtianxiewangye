@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>8.26 黑金之夜 · 数据看板</title>
+<style>
+  :root{
+    --gold:#d4af37; --gold2:#f0d97a; --bg:#0f0f12; --card:#1a1a20;
+    --line:#2c2c36; --text:#e8e6df; --muted:#9a968b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;min-height:100vh;padding-bottom:60px;}
+  .wrap{max-width:1280px;margin:0 auto;padding:20px 16px;}
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:6px 0 14px;}
+  h1{font-size:22px;letter-spacing:3px;color:var(--gold2);}
+  .sub{color:var(--muted);font-size:12px;margin-top:4px;}
+  .toolbar{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .toolbar .f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);}
+  .toolbar select,.toolbar input{background:#111118;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font-size:14px;outline:none;}
+  .toolbar select:focus,.toolbar input:focus{border-color:var(--gold);}
+  .btn{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#14120a;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .stats{display:flex;gap:14px;flex-wrap:wrap;margin:14px 0;color:var(--muted);font-size:13px;}
+  .stats b{color:var(--gold2);font-size:16px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:16px;}
+  .card h2{font-size:15px;color:var(--gold2);margin-bottom:10px;letter-spacing:1px;}
+  .tablebox{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:1100px;}
+  th,td{border-bottom:1px solid var(--line);padding:8px 8px;text-align:right;white-space:nowrap;}
+  th{color:var(--muted);font-weight:500;font-size:12px;position:sticky;top:0;background:var(--card);}
+  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2),th:nth-child(3),td:nth-child(3){text-align:left;}
+  tr:hover td{background:#20202a;}
+  tr.total td{background:#241f0d;font-weight:700;color:var(--gold2);border-top:2px solid var(--gold);border-bottom:none;}
+  .empty{color:var(--muted);text-align:center;padding:30px 0;font-size:14px;}
+  .muted{color:var(--muted);font-size:12px;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>黑金之夜 · 数据看板</h1>
+      <div class="sub">SPR 填写数据实时展示（每 30 秒自动刷新）</div>
+    </div>
+    <button class="btn" id="refreshBtn">立即刷新</button>
+  </header>
+
+  <div class="toolbar">
+    <div class="f">
+      <span>门店</span>
+      <select id="storeFilter"></select>
+    </div>
+    <div class="f">
+      <span>开始日期（留空=不限）</span>
+      <input type="date" id="startDate">
+    </div>
+    <div class="f">
+      <span>结束日期（留空=不限）</span>
+      <input type="date" id="endDate">
+    </div>
+  </div>
+
+  <div class="stats">
+    <span>记录数：<b id="statCount">0</b></span>
+    <span>覆盖门店：<b id="statStores">0</b></span>
+    <span>日期范围：<b id="statDates">-</b></span>
+  </div>
+
+  <div class="card">
+    <h2>明细记录</h2>
+    <div class="tablebox">
+      <table id="detailTable">
+        <thead>
+          <tr>
+            <th>门店</th><th>活动日期</th><th>SPR姓名</th>
+            <th>赠品黑金255罐</th><th>机制1</th><th>机制2</th><th>机制3</th><th>机制4</th>
+            <th>当晚啤酒总销量</th><th>当晚ABI总销量</th><th>当晚百威家族</th><th>当晚黑金销量</th>
+            <th>当晚竞品总销量</th><th>当晚重点竞品</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyTip">暂无数据</div>
+  </div>
+
+  <div class="card" id="storeSummaryCard" style="display:none;">
+    <h2>按门店汇总（多日）</h2>
+    <div class="tablebox">
+      <table id="storeTable">
+        <thead>
+          <tr>
+            <th>门店</th><th>SPR姓名</th>
+            <th>赠品黑金255罐</th><th>机制1</th><th>机制2</th><th>机制3</th><th>机制4</th>
+            <th>当晚啤酒总销量</th><th>当晚ABI总销量</th><th>当晚百威家族</th><th>当晚黑金销量</th>
+            <th>当晚竞品总销量</th><th>当晚重点竞品</th>
+          </tr>
+        </thead>
+        <tbody id="storeBody"></tbody>
+      </table>
+    </div>
+    <div class="muted">同一门店在所选日期内有不同 SPR 时，姓名会并列显示（如：张三 / 李四）。</div>
+  </div>
+
+  <div class="card">
+    <h2>汇总（合计）</h2>
+    <div class="tablebox">
+      <table>
+        <thead>
+          <tr>
+            <th>门店</th><th>活动日期</th><th>SPR姓名</th>
+            <th>赠品黑金255罐</th><th>机制1</th><th>机制2</th><th>机制3</th><th>机制4</th>
+            <th>当晚啤酒总销量</th><th>当晚ABI总销量</th><th>当晚百威家族</th><th>当晚黑金销量</th>
+            <th>当晚竞品总销量</th><th>当晚重点竞品</th>
+          </tr>
+        </thead>
+        <tbody id="totalBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ==================== 配置区 ====================
+const SUPABASE_URL = 'https://bowlifxrvxoomzakfsvg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvd2xpZnhydnhvb216YWtmc3ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjU2ODYsImV4cCI6MjEwMjcwMTY4Nn0.EdbsU7Svfp28JVM2CGlPl6pJ4pA1Ai6t-BrCWKpLvyM';
+// 门店列表：与问卷页保持一致；看板会优先用数据库里已有的门店生成筛选
+const STORE_LIST = ['A','B','C','D','E'];
+// 自动刷新间隔（毫秒），30 秒 = 30000
+const AUTO_REFRESH_MS = 30000;
+// =================================================
+
+const NUM_KEYS = [
+  'gift_255_cans','mechanism1','mechanism2','mechanism3','mechanism4',
+  'beer_total','abi_total','bud_family','blackgold_total','competitor_total','key_competitor'
+];
+const NUM_LABELS = [
+  '赠品黑金255罐','机制1','机制2','机制3','机制4',
+  '当晚啤酒总销量','当晚ABI总销量','当晚百威家族','当晚黑金销量','当晚竞品总销量','当晚重点竞品'
+];
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let allRows = [];
+
+async function loadStores() {
+  try {
+    const { data } = await supabase.from('spr_records').select('store_name');
+    const set = new Set();
+    if (data) data.forEach(r => set.add(r.store_name));
+    STORE_LIST.forEach(s => set.add(s));
+    const sel = document.getElementById('storeFilter');
+    const all = document.createElement('option');
+    all.value = 'all';
+    all.textContent = '全部门店';
+    sel.appendChild(all);
+    [...set].sort().forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    const sel = document.getElementById('storeFilter');
+    const all = document.createElement('option');
+    all.value = 'all';
+    all.textContent = '全部门店';
+    sel.appendChild(all);
+    STORE_LIST.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+async function loadData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '刷新中…';
+
+  const store = document.getElementById('storeFilter').value;
+  const start = document.getElementById('startDate').value;
+  const end = document.getElementById('endDate').value;
+
+  let query = supabase.from('spr_records').select('*');
+  if (store && store !== 'all') query = query.eq('store_name', store);
+  if (start) query = query.gte('activity_date', start);
+  if (end) query = query.lte('activity_date', end);
+  query = query.order('activity_date', { ascending: false }).order('store_name', { ascending: true });
+
+  const { data, error } = await query;
+  allRows = error ? [] : (data || []);
+  render();
+
+  btn.disabled = false;
+  btn.textContent = '立即刷新';
+}
+
+function sum(rows, key) {
+  return rows.reduce((a, r) => a + (Number(r[key]) || 0), 0);
+}
+
+function render() {
+  const rows = allRows;
+  const tbody = document.getElementById('detailBody');
+  const emptyTip = document.getElementById('emptyTip');
+  tbody.innerHTML = '';
+
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    const cells = [r.store_name, r.activity_date, r.spr_name];
+    NUM_KEYS.forEach(k => cells.push(Number(r[k]) || 0));
+    cells.forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+
+  emptyTip.style.display = rows.length ? 'none' : 'block';
+  document.getElementById('statCount').textContent = rows.length;
+
+  const storeSet = new Set(rows.map(r => r.store_name));
+  document.getElementById('statStores').textContent = storeSet.size;
+  const dates = rows.map(r => r.activity_date);
+  document.getElementById('statDates').textContent = dates.length
+    ? Math.min(...dates) + ' ~ ' + Math.max(...dates)
+    : '-';
+
+  // 底部合计
+  const totalBody = document.getElementById('totalBody');
+  const tr = document.createElement('tr');
+  tr.className = 'total';
+  const headCells = ['合计', rows.length ? dates.length + ' 个日期' : '-', rows.length ? new Set(rows.map(r => r.spr_name)).size + ' 人' : '-'];
+  headCells.forEach(v => {
+    const td = document.createElement('td');
+    td.textContent = v;
+    tr.appendChild(td);
+  });
+  NUM_KEYS.forEach(k => {
+    const td = document.createElement('td');
+    td.textContent = sum(rows, k);
+    tr.appendChild(td);
+  });
+  totalBody.innerHTML = '';
+  totalBody.appendChild(tr);
+
+  // 按门店汇总：仅当筛选“全部门店”且日期范围超过一天时显示
+  const isAllStores = document.getElementById('storeFilter').value === 'all';
+  const multiDay = isAllStores && !(startDate.value && endDate.value && startDate.value === endDate.value) && dates.length > 0;
+  const card = document.getElementById('storeSummaryCard');
+  const sBody = document.getElementById('storeBody');
+  card.style.display = multiDay ? 'block' : 'none';
+  if (multiDay) {
+    const byStore = {};
+    rows.forEach(r => {
+      if (!byStore[r.store_name]) byStore[r.store_name] = [];
+      byStore[r.store_name].push(r);
+    });
+    sBody.innerHTML = '';
+    Object.keys(byStore).sort().forEach(name => {
+      const rs = byStore[name];
+      const names = [...new Set(rs.map(r => r.spr_name))].join(' / ');
+      const tr2 = document.createElement('tr');
+      const cells2 = [name, names];
+      NUM_KEYS.forEach(k => cells2.push(sum(rs, k)));
+      cells2.forEach(v => {
+        const td = document.createElement('td');
+        td.textContent = v;
+        tr2.appendChild(td);
+      });
+      sBody.appendChild(tr2);
+    });
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+document.getElementById('storeFilter').addEventListener('change', loadData);
+document.getElementById('startDate').addEventListener('change', loadData);
+document.getElementById('endDate').addEventListener('change', loadData);
+
+loadStores().then(loadData);
+setInterval(loadData, AUTO_REFRESH_MS);
+</script>
+</body>
+</html>

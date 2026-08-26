@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>8.26 黑金之夜 · SPR 填写</title>
+<style>
+  :root{
+    --gold:#d4af37; --gold2:#f0d97a; --bg:#0f0f12; --card:#1a1a20;
+    --line:#2c2c36; --text:#e8e6df; --muted:#9a968b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:560px;margin:0 auto;padding:20px 16px 60px;}
+  header{text-align:center;padding:14px 0 4px;}
+  h1{font-size:26px;letter-spacing:4px;color:var(--gold2);}
+  .sub{color:var(--muted);font-size:13px;margin-top:6px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-top:18px;}
+  label{display:block;font-size:13px;color:var(--muted);margin:16px 0 6px;}
+  .req{color:#e05b5b;}
+  input,select{width:100%;background:#111118;border:1px solid var(--line);color:var(--text);border-radius:9px;padding:11px 12px;font-size:15px;outline:none;-webkit-appearance:none;appearance:none;}
+  input:focus,select:focus{border-color:var(--gold);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;}
+  .grid2 label{margin-top:16px;}
+  button.submit{width:100%;margin-top:24px;padding:14px;font-size:17px;font-weight:600;color:#14120a;background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;border-radius:11px;cursor:pointer;}
+  button.submit:disabled{opacity:.55;cursor:not-allowed;}
+  .msg{display:none;margin-top:16px;padding:12px 14px;border-radius:9px;font-size:14px;line-height:1.6;}
+  .msg.ok{display:block;background:#0f2417;border:1px solid #2e7d4f;color:#7ee2a8;}
+  .msg.err{display:block;background:#2a1414;border:1px solid #a33;color:#f0a0a0;}
+  .cur{display:none;margin-top:14px;font-size:13px;color:var(--muted);}
+  .cur.show{display:block;}
+  .cur b{color:var(--gold2);}
+  .cur table{width:100%;border-collapse:collapse;margin-top:8px;background:#111118;border-radius:8px;overflow:hidden;}
+  .cur td{border-bottom:1px solid var(--line);padding:7px 10px;}
+  .cur tr:last-child td{border-bottom:none;}
+  .cur td:last-child{text-align:right;font-weight:600;color:var(--gold2);}
+  .hint{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>黑金之夜</h1>
+    <div class="sub">SPR 数据填写 · 8.26 活动</div>
+  </header>
+  <div class="card">
+    <form id="sprForm" autocomplete="off">
+      <label for="store">门店名称 <span class="req">*</span></label>
+      <select id="store" required></select>
+      <div class="grid2">
+        <div>
+          <label for="activityDate">活动日期 <span class="req">*</span></label>
+          <input type="date" id="activityDate" required>
+        </div>
+        <div>
+          <label for="sprName">SPR姓名 <span class="req">*</span></label>
+          <input type="text" id="sprName" placeholder="填写你的姓名" required maxlength="20">
+        </div>
+      </div>
+      <div id="numFields"></div>
+      <button class="submit" type="submit" id="btn">提交数据</button>
+      <div class="msg" id="msg"></div>
+      <div class="cur" id="cur"></div>
+      <div class="hint">提示：同一门店、同一活动日期再次提交时，数字会自动<b>累加</b>，姓名记录为最新填写人。提交前请核对数字。</div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ==================== 配置区（改这里就行） ====================
+// 项目地址：Supabase → Settings → API → Project URL
+const SUPABASE_URL = 'https://bowlifxrvxoomzakfsvg.supabase.co';
+// 公开密钥：Supabase → Settings → API → anon public（不要用 service_role）
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvd2xpZnhydnhvb216YWtmc3ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjU2ODYsImV4cCI6MjEwMjcwMTY4Nn0.EdbsU7Svfp28JVM2CGlPl6pJ4pA1Ai6t-BrCWKpLvyM';
+// 门店列表：拿到100家门店名单后，按下面格式替换，一行一个，注意用英文逗号分隔
+const STORE_LIST = ['A','B','C','D','E'];
+// 默认活动日期（SPR 可以自己改）
+const DEFAULT_DATE = '2026-08-26';
+// ==============================================================
+
+// 数字字段（对应表格 SPR填写 部分，键名与数据库一致，不要改）
+const FIELDS = [
+  { key:'gift_255_cans',    label:'赠品黑金255罐数量（听）' },
+  { key:'mechanism1',       label:'机制1：到店即赠（听）' },
+  { key:'mechanism2',       label:'机制2：1-6瓶点购即赠（听）' },
+  { key:'mechanism3',       label:'机制3：12瓶赠整箱（听）' },
+  { key:'mechanism4',       label:'机制4：大桌锁定（店内收银条核销）（听）' },
+  { key:'beer_total',       label:'当晚啤酒总销量' },
+  { key:'abi_total',        label:'当晚ABI总销量' },
+  { key:'bud_family',       label:'当晚百威家族（经典/金尊/纯生）销量' },
+  { key:'blackgold_total',  label:'当晚黑金销量' },
+  { key:'competitor_total', label:'当晚竞品总销量' },
+  { key:'key_competitor',   label:'当晚重点竞品销量：喜力/乌苏/老雪' }
+];
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const form = document.getElementById('sprForm');
+const btn = document.getElementById('btn');
+const msg = document.getElementById('msg');
+const cur = document.getElementById('cur');
+
+// 门店下拉
+const storeSel = document.getElementById('store');
+STORE_LIST.forEach(s => {
+  const opt = document.createElement('option');
+  opt.value = s;
+  opt.textContent = s;
+  storeSel.appendChild(opt);
+});
+
+// 数字输入框
+const numBox = document.getElementById('numFields');
+const inputs = {};
+FIELDS.forEach(f => {
+  const lab = document.createElement('label');
+  lab.textContent = f.label + ' ';
+  const req = document.createElement('span');
+  req.className = 'req';
+  req.textContent = '*';
+  lab.appendChild(req);
+  lab.htmlFor = f.key;
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.id = f.key;
+  inp.name = f.key;
+  inp.min = '0';
+  inp.step = '1';
+  inp.required = true;
+  inp.placeholder = '0';
+  inputs[f.key] = inp;
+  numBox.appendChild(lab);
+  numBox.appendChild(inp);
+});
+
+// 默认日期
+document.getElementById('activityDate').value = DEFAULT_DATE;
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (btn.disabled) return;
+  msg.className = 'msg';
+  msg.textContent = '';
+  cur.className = 'cur';
+
+  const payload = {
+    p_store_name: storeSel.value,
+    p_activity_date: document.getElementById('activityDate').value,
+    p_spr_name: document.getElementById('sprName').value.trim()
+  };
+  for (const f of FIELDS) payload['p_' + f.key] = Number(inputs[f.key].value);
+
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+  const { data, error } = await supabase.rpc('submit_spr_record', payload);
+  btn.disabled = false;
+  btn.textContent = '提交数据';
+
+  if (error) {
+    msg.className = 'msg err';
+    msg.textContent = '提交失败：' + error.message + '。请检查数据库是否已按操作手册建好，或稍后重试。';
+    return;
+  }
+
+  msg.className = 'msg ok';
+  msg.textContent = '提交成功！数字已累加到数据库。';
+
+  // 显示该门店该日期当前的累计值
+  if (data) {
+    const rows = [
+      ['门店', data.store_name],
+      ['活动日期', data.activity_date],
+      ['SPR姓名', data.spr_name]
+    ];
+    FIELDS.forEach(f => rows.push([f.label, data[f.key]]));
+    let html = '<b>当前累计：</b><table>';
+    rows.forEach(r => { html += '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>'; });
+    html += '</table>';
+    cur.innerHTML = html;
+    cur.className = 'cur show';
+  }
+});
+</script>
+</body>
+</html>
